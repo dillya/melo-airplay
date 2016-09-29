@@ -10,7 +10,8 @@ libmelo_airplay_la_SOURCES = \
 	gstrtpraopdepay.c \
 	gstrtpraop.c \
 	gsttcpraop.c \
-	melo_airplay.c
+	melo_airplay.c \
+	melo_airplay_plugin.c
 
 libmelo_airplay_la_SOURCES += \
 	ext/gstrtpjitterbuffer.c \
