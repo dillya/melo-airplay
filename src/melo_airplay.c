@@ -205,11 +205,11 @@ melo_airplay_update_service (MeloAirplayPrivate *priv)
 
   /* Add service */
   if (!priv->service)
-    priv->service = melo_avahi_add (priv->avahi, sname, "_raop._tcp",
-                                    priv->port, RAOP_SERVICE_TXT);
+    priv->service = melo_avahi_add_service (priv->avahi, sname, "_raop._tcp",
+                                            priv->port, RAOP_SERVICE_TXT);
   else
-    melo_avahi_update (priv->avahi, priv->service, sname, NULL, priv->port,
-                       TRUE, RAOP_SERVICE_TXT);
+    melo_avahi_update_service (priv->avahi, priv->service, sname, NULL,
+                               priv->port, TRUE, RAOP_SERVICE_TXT);
 
   /* Free service name */
   g_free (sname);
