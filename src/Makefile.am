@@ -1,9 +1,5 @@
 melolib_LTLIBRARIES = libmelo_airplay.la
 
-# Airplay module library
-#libmelo_airplay_la_DEPENDENCIES = \
-#	$(top_builddir)/src/lib/libmelo.la
-
 libmelo_airplay_la_SOURCES = \
 	melo_config_airplay.c \
 	melo_player_airplay.c \

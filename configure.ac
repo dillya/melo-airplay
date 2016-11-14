@@ -11,7 +11,7 @@ dnl Set up macro directory
 AC_CONFIG_MACRO_DIR([m4])
 
 dnl Set source directory
-AC_CONFIG_SRCDIR([src/melo_airplay.c])
+AC_CONFIG_SRCDIR([src/melo_airplay_plugin.c])
 
 dnl Check for programs
 AC_PROG_CC
