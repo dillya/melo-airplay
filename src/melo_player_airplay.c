@@ -47,6 +47,8 @@ static MeloPlayerState melo_player_airplay_get_state (MeloPlayer *player);
 static gchar *melo_player_airplay_get_name (MeloPlayer *player);
 static gint melo_player_airplay_get_pos (MeloPlayer *player, gint *duration);
 static MeloPlayerStatus *melo_player_airplay_get_status (MeloPlayer *player);
+static gboolean melo_player_airplay_get_cover (MeloPlayer *player,
+                                               GBytes **data, gchar **type);
 
 struct _MeloPlayerAirplayPrivate {
   GMutex mutex;
@@ -119,6 +121,7 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
   pclass->get_name = melo_player_airplay_get_name;
   pclass->get_pos = melo_player_airplay_get_pos;
   pclass->get_status = melo_player_airplay_get_status;
+  pclass->get_cover = melo_player_airplay_get_cover;
 
   /* Add custom finalize() function */
   object_class->finalize = melo_player_airplay_finalize;
@@ -293,6 +296,28 @@ melo_player_airplay_get_status (MeloPlayer *player)
   g_mutex_unlock (&priv->mutex);
 
   return status;
+}
+
+static gboolean
+melo_player_airplay_get_cover (MeloPlayer *player, GBytes **data, gchar **type)
+{
+  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
+  MeloTags *tags;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Copy status */
+  tags = melo_player_status_get_tags (priv->status);
+  if (tags) {
+    *data = melo_tags_get_cover (tags, type);
+    melo_tags_unref (tags);
+  }
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return TRUE;
 }
 
 static gboolean
@@ -709,6 +734,7 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
   /* Set cover */
   if (tags) {
     melo_tags_take_cover (tags, cover, cover_type);
+    melo_tags_set_cover_url (tags, G_OBJECT (pair), NULL, NULL);
     melo_tags_unref (tags);
   }
 
