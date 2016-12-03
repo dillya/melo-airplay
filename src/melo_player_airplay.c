@@ -272,7 +272,8 @@ melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
   /* Get RTP time */
   if (gst_rtp_raop_depay_query_rtptime (GST_RTP_RAOP_DEPAY (priv->raop_depay),
                                         &pos)) {
-    pos = ((pos - priv->start_rtptime) * 1000L) / priv->samplerate;
+    pos = ((pos - priv->start_rtptime) * G_GUINT64_CONSTANT (1000)) /
+          priv->samplerate;
   }
 
   /* Get length */
@@ -708,8 +709,10 @@ melo_player_airplay_set_progress (MeloPlayerAirplay *pair, guint start,
   /* Set progression */
   priv->start_rtptime = start;
   priv->status->state = MELO_PLAYER_STATE_PLAYING;
-  priv->status->pos = (cur - start) * 1000L / priv->samplerate;
-  priv->status->duration =  (end - start) * 1000L / priv->samplerate;
+  priv->status->pos = (cur - start) * G_GUINT64_CONSTANT (1000) /
+                      priv->samplerate;
+  priv->status->duration = (end - start) * G_GUINT64_CONSTANT (1000) /
+                           priv->samplerate;
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
