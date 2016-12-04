@@ -46,6 +46,7 @@ static MeloPlayerState melo_player_airplay_set_state (MeloPlayer *player,
 static MeloPlayerState melo_player_airplay_get_state (MeloPlayer *player);
 static gchar *melo_player_airplay_get_name (MeloPlayer *player);
 static gint melo_player_airplay_get_pos (MeloPlayer *player, gint *duration);
+static gdouble melo_player_airplay_get_player_volume (MeloPlayer *player);
 static MeloPlayerStatus *melo_player_airplay_get_status (MeloPlayer *player);
 static gboolean melo_player_airplay_get_cover (MeloPlayer *player,
                                                GBytes **data, gchar **type);
@@ -120,6 +121,7 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
   pclass->get_state = melo_player_airplay_get_state;
   pclass->get_name = melo_player_airplay_get_name;
   pclass->get_pos = melo_player_airplay_get_pos;
+  pclass->get_volume = melo_player_airplay_get_player_volume;
   pclass->get_status = melo_player_airplay_get_status;
   pclass->get_cover = melo_player_airplay_get_cover;
 
@@ -238,7 +240,19 @@ melo_player_airplay_set_pos (MeloPlayer *player, gint pos)
 static MeloPlayerState
 melo_player_airplay_get_state (MeloPlayer *player)
 {
-  return (MELO_PLAYER_AIRPLAY (player))->priv->status->state;
+  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
+  MeloPlayerState state;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Get state */
+  state = priv->status->state;
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  return state;
 }
 
 static gchar *
@@ -265,6 +279,9 @@ melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
   MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
   guint32 pos = 0;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Get duration */
   if (duration)
     *duration = priv->status->duration;
@@ -276,8 +293,16 @@ melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
           priv->samplerate;
   }
 
-  /* Get length */
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
   return pos;
+}
+
+static gdouble
+melo_player_airplay_get_player_volume (MeloPlayer *player)
+{
+  return ((MELO_PLAYER_AIRPLAY (player))->priv)->volume;
 }
 
 static MeloPlayerStatus *
@@ -291,10 +316,13 @@ melo_player_airplay_get_status (MeloPlayer *player)
 
   /* Copy status */
   status = melo_player_status_ref (priv->status);
-  priv->status->pos = melo_player_airplay_get_pos (player, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
+
+  /* Update status */
+  status->pos = melo_player_airplay_get_pos (player, NULL);
+  status->volume = melo_player_airplay_get_player_volume (player);
 
   return status;
 }
