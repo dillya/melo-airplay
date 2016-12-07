@@ -20,6 +20,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <openssl/aes.h>
 
 #include <gst/rtp/gstrtpbuffer.h>
@@ -151,7 +152,9 @@ gst_rtp_raop_depay_parse_alac_config (GstRtpRaopDepay * rtpraopdepay,
 
   /* Get twelve values from config string */
   for (i = 0; i < 12; i++) {
-    values[i] = strtoul (config, &config, 10);
+    gchar *c;
+    values[i] = strtoul (config, &c, 10);
+    config = c;
     if (!config && i != 11)
       return FALSE;
   }

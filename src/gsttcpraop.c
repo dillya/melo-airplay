@@ -19,6 +19,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <gio/gio.h>
@@ -131,8 +132,9 @@ gst_tcp_raop_set_sink_caps (GstBaseParse * parse, GstCaps * caps)
   /* extract sample size from config */
   config = gst_structure_get_string (structure, "config");
   if (config) {
-    strtoul (config, &config, 10);
-    priv->samples = strtoul (config, NULL, 10);
+    gchar *c;
+    strtoul (config, &c, 10);
+    priv->samples = strtoul (c, NULL, 10);
   } else
     priv->samples = DEFAULT_SAMPLES;
 
