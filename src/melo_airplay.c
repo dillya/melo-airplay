@@ -413,8 +413,10 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   MeloAirplayPrivate *priv = air->priv;
   gboolean hack_sync;
   const gchar *header, *h, *id;
+  const gchar *hostname;
   gchar *transport;
   gchar *player_id;
+  gchar *player_name;
 
   /* Get Transport header */
   header = melo_rtsp_get_header (client, "Transport");
@@ -443,6 +445,11 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
   aclient->client_control_port = aclient->control_port;
   aclient->client_timing_port = aclient->timing_port;
 
+  /* Get client hostname and create player name */
+  hostname = melo_rtsp_get_hostname (client);
+  player_name = g_strdup_printf ("Airplay: %s",
+                                 hostname ? hostname : "unknown");
+
   /* Generate a unique ID for its player */
   id = melo_rtsp_get_header (client, "Client-Instance");
   if (!id)
@@ -453,7 +460,8 @@ melo_airplay_request_setup (MeloRTSPClient *client, MeloAirplayClient *aclient,
     player_id = g_strdup_printf ("airplay_%d", g_random_int_range (1000, 9999));
 
   /* Create a new player */
-  aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, player_id);
+  aclient->player = melo_player_new (MELO_TYPE_PLAYER_AIRPLAY, player_id,
+                                     player_name);
   melo_module_register_player (MELO_MODULE (air), aclient->player);
   g_free (player_id);
 
