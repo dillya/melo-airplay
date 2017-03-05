@@ -40,8 +40,6 @@
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                                           const gchar *name, MeloTags *tags,
                                           gboolean insert);
-static MeloPlayerState melo_player_airplay_set_state (MeloPlayer *player,
-                                                      MeloPlayerState state);
 
 static MeloPlayerState melo_player_airplay_get_state (MeloPlayer *player);
 static gchar *melo_player_airplay_get_name (MeloPlayer *player);
@@ -115,7 +113,6 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
 
   /* Control */
   pclass->play = melo_player_airplay_play;
-  pclass->set_state = melo_player_airplay_set_state;
 
   /* Status */
   pclass->get_state = melo_player_airplay_get_state;
@@ -207,34 +204,6 @@ melo_player_airplay_play (MeloPlayer *player, const gchar *path,
   g_mutex_unlock (&priv->mutex);
 
   return TRUE;
-}
-
-static MeloPlayerState
-melo_player_airplay_set_state (MeloPlayer *player, MeloPlayerState state)
-{
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  if (state == MELO_PLAYER_STATE_PLAYING)
-    gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
-  else if (state == MELO_PLAYER_STATE_PAUSED)
-    gst_element_set_state (priv->pipeline, GST_STATE_PAUSED);
-  else
-    state = priv->status->state;
-  priv->status->state = state;
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return state;
-}
-
-static gint
-melo_player_airplay_set_pos (MeloPlayer *player, gint pos)
-{
-  return -1;
 }
 
 static MeloPlayerState
