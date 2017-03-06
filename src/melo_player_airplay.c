@@ -40,6 +40,8 @@
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                                           const gchar *name, MeloTags *tags,
                                           gboolean insert);
+static gboolean melo_player_airplay_set_mute (MeloPlayer *player,
+                                              gboolean mute);
 
 static MeloPlayerState melo_player_airplay_get_state (MeloPlayer *player);
 static gchar *melo_player_airplay_get_name (MeloPlayer *player);
@@ -113,6 +115,7 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
 
   /* Control */
   pclass->play = melo_player_airplay_play;
+  pclass->set_mute = melo_player_airplay_set_mute;
 
   /* Status */
   pclass->get_state = melo_player_airplay_get_state;
@@ -204,6 +207,26 @@ melo_player_airplay_play (MeloPlayer *player, const gchar *path,
   g_mutex_unlock (&priv->mutex);
 
   return TRUE;
+}
+
+static gboolean
+melo_player_airplay_set_mute (MeloPlayer *player, gboolean mute)
+{
+  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
+
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
+  /* Set mute */
+  melo_player_status_set_mute (priv->status, mute);
+
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
+  /* Mute pipeline */
+  g_object_set (priv->vol, "mute", mute, NULL);
+
+  return mute;
 }
 
 static MeloPlayerState
