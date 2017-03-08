@@ -29,7 +29,6 @@
 
 #include "ext/gstrtpjitterbuffer.h"
 
-#include "melo_event.h"
 #include "melo_player_airplay.h"
 
 #define MIN_LATENCY 100
@@ -38,25 +37,16 @@
 #define DEFAULT_RTX_RETRY_PERIOD 100
 #define DEFAULT_VOLUME 1.0
 
-static void melo_player_airplay_constructed (GObject *gobject);
-
 static gboolean melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                                           const gchar *name, MeloTags *tags,
                                           gboolean insert);
 static gboolean melo_player_airplay_set_mute (MeloPlayer *player,
                                               gboolean mute);
 
-static MeloPlayerState melo_player_airplay_get_state (MeloPlayer *player);
-static gchar *melo_player_airplay_get_name (MeloPlayer *player);
-static gint melo_player_airplay_get_pos (MeloPlayer *player, gint *duration);
-static gdouble melo_player_airplay_get_player_volume (MeloPlayer *player);
-static MeloPlayerStatus *melo_player_airplay_get_status (MeloPlayer *player);
-static gboolean melo_player_airplay_get_cover (MeloPlayer *player,
-                                               GBytes **data, gchar **type);
+static gint melo_player_airplay_get_pos (MeloPlayer *player);
 
 struct _MeloPlayerAirplayPrivate {
   GMutex mutex;
-  MeloPlayerStatus *status;
   guint32 start_rtptime;
   gdouble volume;
 
@@ -89,9 +79,6 @@ melo_player_airplay_finalize (GObject *gobject)
   /* Stop pipeline */
   melo_player_airplay_teardown (pair);
 
-  /* Free status */
-  melo_player_status_unref (priv->status);
-
   /* Clear mutex */
   g_mutex_clear (&priv->mutex);
 
@@ -121,15 +108,7 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
   pclass->set_mute = melo_player_airplay_set_mute;
 
   /* Status */
-  pclass->get_state = melo_player_airplay_get_state;
-  pclass->get_name = melo_player_airplay_get_name;
   pclass->get_pos = melo_player_airplay_get_pos;
-  pclass->get_volume = melo_player_airplay_get_player_volume;
-  pclass->get_status = melo_player_airplay_get_status;
-  pclass->get_cover = melo_player_airplay_get_cover;
-
-  /* Add custom constructed() function */
-  object_class->constructed = melo_player_airplay_constructed;
 
   /* Add custom finalize() function */
   object_class->finalize = melo_player_airplay_finalize;
@@ -151,48 +130,26 @@ melo_player_airplay_init (MeloPlayerAirplay *self)
   g_mutex_init (&priv->mutex);
 }
 
-static void
-melo_player_airplay_constructed (GObject *gobject)
-{
-  MeloPlayerAirplayPrivate *priv =
-       melo_player_airplay_get_instance_private (MELO_PLAYER_AIRPLAY (gobject));
-
-  /* Create new status handler */
-  priv->status = melo_player_status_new (MELO_PLAYER (gobject),
-                                         MELO_PLAYER_STATE_NONE, NULL);
-}
-
 static gboolean
 bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 {
   MeloPlayerAirplay *pair = MELO_PLAYER_AIRPLAY (data);
   MeloPlayerAirplayPrivate *priv = pair->priv;
+  MeloPlayer *player = MELO_PLAYER (pair);
   GError *error;
 
   /* Process bus message */
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_EOS:
-      /* Lock player mutex */
-      g_mutex_lock (&priv->mutex);
-
       /* Stop playing */
       gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-      melo_player_status_set_state (priv->status, MELO_PLAYER_STATE_STOPPED);
-
-      /* Unlock player mutex */
-      g_mutex_unlock (&priv->mutex);
+      melo_player_set_status_state (player, MELO_PLAYER_STATE_STOPPED);
       break;
     case GST_MESSAGE_ERROR:
-      /* Lock player mutex */
-      g_mutex_lock (&priv->mutex);
-
       /* Update error message */
       gst_message_parse_error (msg, &error, NULL);
-      melo_player_status_set_error (priv->status, error->message, TRUE);
+      melo_player_set_status_error (player, error->message);
       g_error_free (error);
-
-      /* Unlock player mutex */
-      g_mutex_unlock (&priv->mutex);
       break;
     default:
       ;
@@ -205,28 +162,8 @@ static gboolean
 melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                           const gchar *name, MeloTags *tags, gboolean insert)
 {
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  MeloPlayerStatus *status;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
   /* Update tags */
-  status = melo_player_status_new (player, priv->status->state, NULL);
-  status->pos = priv->status->pos;
-  status->duration = priv->status->duration;
-  status->volume = priv->status->volume;
-  status->mute = priv->status->mute;
-  melo_player_status_take_tags (status, tags, FALSE);
-  melo_player_status_unref (priv->status);
-  priv->status = status;
-
-  /* Send 'player status' event */
-  melo_event_player_status (melo_player_get_id (player),
-                            melo_player_status_ref (status));
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
+  melo_player_take_status_tags (player, tags);
 
   return TRUE;
 }
@@ -239,66 +176,24 @@ melo_player_airplay_set_mute (MeloPlayer *player, gboolean mute)
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
-  /* Set mute */
-  melo_player_status_set_mute (priv->status, mute);
+  /* Mute pipeline */
+  if (priv->vol)
+    g_object_set (priv->vol, "mute", mute, NULL);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
-
-  /* Mute pipeline */
-  g_object_set (priv->vol, "mute", mute, NULL);
 
   return mute;
 }
 
-static MeloPlayerState
-melo_player_airplay_get_state (MeloPlayer *player)
-{
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  MeloPlayerState state;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Get state */
-  state = priv->status->state;
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return state;
-}
-
-static gchar *
-melo_player_airplay_get_name (MeloPlayer *player)
-{
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  gchar *name = NULL;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Copy name */
-  name = melo_player_status_get_name (priv->status);
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return name;
-}
-
 static gint
-melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
+melo_player_airplay_get_pos (MeloPlayer *player)
 {
   MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
   guint32 pos = 0;
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
-
-  /* Get duration */
-  if (duration)
-    *duration = priv->status->duration;
 
   /* Get RTP time */
   if (gst_rtp_raop_depay_query_rtptime (GST_RTP_RAOP_DEPAY (priv->raop_depay),
@@ -311,56 +206,6 @@ melo_player_airplay_get_pos (MeloPlayer *player, gint *duration)
   g_mutex_unlock (&priv->mutex);
 
   return pos;
-}
-
-static gdouble
-melo_player_airplay_get_player_volume (MeloPlayer *player)
-{
-  return ((MELO_PLAYER_AIRPLAY (player))->priv)->volume;
-}
-
-static MeloPlayerStatus *
-melo_player_airplay_get_status (MeloPlayer *player)
-{
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  MeloPlayerStatus *status;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Copy status */
-  status = melo_player_status_ref (priv->status);
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  /* Update status */
-  status->pos = melo_player_airplay_get_pos (player, NULL);
-  status->volume = melo_player_airplay_get_player_volume (player);
-
-  return status;
-}
-
-static gboolean
-melo_player_airplay_get_cover (MeloPlayer *player, GBytes **data, gchar **type)
-{
-  MeloPlayerAirplayPrivate *priv = (MELO_PLAYER_AIRPLAY (player))->priv;
-  MeloTags *tags;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Copy status */
-  tags = melo_player_status_get_tags (priv->status);
-  if (tags) {
-    *data = melo_tags_get_cover (tags, type);
-    melo_tags_unref (tags);
-  }
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return TRUE;
 }
 
 static gboolean
@@ -440,12 +285,15 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
   gchar *pname;
   GstBus *bus;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   if (priv->pipeline)
-    return FALSE;
+    goto failed;
 
   /* Parse format */
   if (!melo_player_airplay_parse_format (priv, codec, format, &encoding))
-    return FALSE;
+    goto failed;
 
   /* Get ID from player */
   id = melo_player_get_id (MELO_PLAYER (pair));
@@ -552,7 +400,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
         /* Retry until a free port is available */
         *control_port += 2;
         if (*control_port > max_control_port)
-          return FALSE;
+          goto failed;
 
         /* Update UDP source port */
         g_object_set (ctrl_src, "port", *control_port, NULL);
@@ -642,26 +490,34 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     /* Incremnent port until we found a free port */
     *port += 2;
     if (*port > max_port)
-      return FALSE;
+      goto failed;
 
     /* Update port */
     g_object_set (src, "port", *port, NULL);
   }
 
+  /* Unlock player mutex */
+  g_mutex_unlock (&priv->mutex);
+
   return TRUE;
+
+failed:
+  g_mutex_unlock (&priv->mutex);
+  return FALSE;
 }
 
 gboolean
 melo_player_airplay_record (MeloPlayerAirplay *pair, guint seq)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
+  MeloPlayer *player = MELO_PLAYER (pair);
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
   /* Set playing */
   gst_element_set_state (priv->pipeline, GST_STATE_PLAYING);
-  melo_player_status_set_state (priv->status, MELO_PLAYER_STATE_PLAYING);
+  melo_player_set_status_state (player, MELO_PLAYER_STATE_PLAYING);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
@@ -672,16 +528,10 @@ melo_player_airplay_record (MeloPlayerAirplay *pair, guint seq)
 gboolean
 melo_player_airplay_flush (MeloPlayerAirplay *pair, guint seq)
 {
-  MeloPlayerAirplayPrivate *priv = pair->priv;
+  MeloPlayer *player = MELO_PLAYER (pair);
 
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Set playing */
-  melo_player_status_set_state (priv->status, MELO_PLAYER_STATE_PAUSED);
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
+  /* Set paused */
+  melo_player_set_status_state (player, MELO_PLAYER_STATE_PAUSED);
 
   return TRUE;
 }
@@ -690,16 +540,20 @@ gboolean
 melo_player_airplay_teardown (MeloPlayerAirplay *pair)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
-
-  if (!priv->pipeline)
-    return FALSE;
+  MeloPlayer *player = MELO_PLAYER (pair);
 
   /* Lock player mutex */
   g_mutex_lock (&priv->mutex);
 
+  /* Already stoped */
+  if (!priv->pipeline) {
+    g_mutex_unlock (&priv->mutex);
+    return FALSE;
+  }
+
   /* Stop pipeline */
   gst_element_set_state (priv->pipeline, GST_STATE_NULL);
-  melo_player_status_set_state (priv->status, MELO_PLAYER_STATE_NONE);
+  melo_player_set_status_state (player, MELO_PLAYER_STATE_NONE);
 
   /* Remove message handler */
   g_source_remove (priv->bus_watch_id);
@@ -717,6 +571,7 @@ gboolean
 melo_player_airplay_set_volume (MeloPlayerAirplay *pair, gdouble volume)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
+  MeloPlayer *player = MELO_PLAYER (pair);
 
   /* Set volume */
   if (volume > -144.0)
@@ -724,18 +579,18 @@ melo_player_airplay_set_volume (MeloPlayerAirplay *pair, gdouble volume)
   else
     priv->volume = 0.0;
 
+  /* Lock player mutex */
+  g_mutex_lock (&priv->mutex);
+
   /* Update volume in pipeline */
   if (priv->vol)
     g_object_set (G_OBJECT (priv->vol), "volume", priv->volume, NULL);
 
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
-  /* Update status volume */
-  melo_player_status_set_volume (priv->status, priv->volume);
-
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
+
+  /* Update status volume */
+  melo_player_set_status_volume (player, priv->volume);
 
   return TRUE;
 }
@@ -753,22 +608,17 @@ melo_player_airplay_set_progress (MeloPlayerAirplay *pair, guint start,
                                   guint cur, guint end)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
-
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
+  MeloPlayer *player = MELO_PLAYER (pair);
 
   /* Set progression */
   priv->start_rtptime = start;
-  melo_player_status_set_state (priv->status, MELO_PLAYER_STATE_PLAYING);
-  melo_player_status_set_pos (priv->status,
+  melo_player_set_status_state (player, MELO_PLAYER_STATE_PLAYING);
+  melo_player_set_status_pos (player,
                               (cur - start) * G_GUINT64_CONSTANT (1000) /
                               priv->samplerate);
-  melo_player_status_set_duration (priv->status,
+  melo_player_set_status_duration (player,
                                    (end - start) * G_GUINT64_CONSTANT (1000) /
                                    priv->samplerate);
-
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
 
   return TRUE;
 }
@@ -777,27 +627,20 @@ gboolean
 melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
                                const gchar *cover_type)
 {
-  MeloPlayerAirplayPrivate *priv = pair->priv;
-  gboolean ret = FALSE;
+  MeloPlayer *player = MELO_PLAYER (pair);
   MeloTags *tags;
 
-  /* Lock player mutex */
-  g_mutex_lock (&priv->mutex);
-
   /* Get tags */
-  tags = melo_player_status_get_tags (priv->status);
+  tags = melo_player_get_tags (player);
 
   /* Set cover */
   if (tags) {
     melo_tags_take_cover (tags, cover, cover_type);
     melo_tags_set_cover_url (tags, G_OBJECT (pair), NULL, NULL);
-    melo_player_status_take_tags (priv->status, tags, TRUE);
+    melo_player_take_status_tags (player, tags);
   }
 
-  /* Unlock player mutex */
-  g_mutex_unlock (&priv->mutex);
-
-  return ret;
+  return TRUE;
 }
 
 void
