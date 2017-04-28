@@ -29,6 +29,7 @@
 
 #include "ext/gstrtpjitterbuffer.h"
 
+#include "melo_sink.h"
 #include "melo_player_airplay.h"
 
 #define MIN_LATENCY 100
@@ -54,6 +55,7 @@ struct _MeloPlayerAirplayPrivate {
   GstElement *pipeline;
   GstElement *raop_depay;
   GstElement *vol;
+  MeloSink *sink;
   guint bus_watch_id;
 
   /* Gstreamer pipeline tunning */
@@ -277,12 +279,13 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
                            const guchar *iv, gsize iv_len)
 {
   MeloPlayerAirplayPrivate *priv = pair->priv;
+  MeloPlayer *player = MELO_PLAYER (pair);
   guint max_port = *port + 100;
   GstElement *src, *vol, *sink;
   GstState next_state = GST_STATE_READY;
+  const gchar *id, *name;
   const gchar *encoding;
-  const gchar *id;
-  gchar *pname;
+  gchar *ename;
   GstBus *bus;
 
   /* Lock player mutex */
@@ -296,12 +299,18 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     goto failed;
 
   /* Get ID from player */
-  id = melo_player_get_id (MELO_PLAYER (pair));
-  pname = g_strdup_printf ("player_pipeline_%s", id);
+  id = melo_player_get_id (player);
+  name = melo_player_get_name (player);
 
   /* Create pipeline */
-  priv->pipeline = gst_pipeline_new (pname);
-  g_free (pname);
+  ename = g_strjoin ("_", id, "pipeline", NULL);
+  priv->pipeline = gst_pipeline_new (ename);
+  g_free (ename);
+
+  /* Create melo audio sink */
+  ename = g_strjoin ("_", id, "sink", NULL);
+  priv->sink = melo_sink_new (player, ename, name);
+  g_free (ename);
 
   /* Create source */
   if (transport == MELO_AIRPLAY_TRANSPORT_UDP) {
@@ -320,7 +329,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     else
       dec = gst_element_factory_make ("avdec_alac", NULL);
     vol = gst_element_factory_make ("volume", NULL);
-    sink = gst_element_factory_make ("autoaudiosink", NULL);
+    sink = melo_sink_get_gst_sink (priv->sink);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, src_caps, raop, rtp,
                       rtp_caps, depay, dec, vol, sink, NULL);
 
@@ -355,7 +364,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
 
     /* Disable synchronization on sink */
     if (priv->disable_sync)
-      g_object_set (G_OBJECT (sink), "sync", FALSE, NULL);
+      melo_sink_set_sync (priv->sink, FALSE);
 
     /* Set latency in jitter buffer */
     if (priv->latency)
@@ -443,7 +452,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
     dec = gst_element_factory_make ("avdec_alac", NULL);
     vol = gst_element_factory_make ("volume", NULL);
-    sink = gst_element_factory_make ("autoaudiosink", NULL);
+    sink = melo_sink_get_gst_sink (priv->sink);
     gst_bin_add_many (GST_BIN (priv->pipeline), src, rtp_caps, raop, depay, dec,
                       vol, sink, NULL);
 
@@ -560,6 +569,9 @@ melo_player_airplay_teardown (MeloPlayerAirplay *pair)
 
   /* Free gstreamer pipeline */
   g_object_unref (priv->pipeline);
+
+  /* Free melo audio sink */
+  g_object_unref (priv->sink);
 
   /* Unlock player mutex */
   g_mutex_unlock (&priv->mutex);
