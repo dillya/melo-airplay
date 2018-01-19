@@ -27,8 +27,6 @@
 #include "gstrtpraop.h"
 #include "gstrtpraopdepay.h"
 
-#include "ext/gstrtpjitterbuffer.h"
-
 #include "melo_sink.h"
 #include "melo_player_airplay.h"
 
@@ -100,10 +98,6 @@ melo_player_airplay_class_init (MeloPlayerAirplayClass *klass)
   /* Register RTP RAOP depayloader */
   gst_rtp_raop_plugin_init (NULL);
   gst_rtp_raop_depay_plugin_init (NULL);
-
-  /* Register internal RTP jitter buffer backported from Gstreamer 1.8.3  */
-  gst_element_register (NULL, "rtpjitterbuffer_bp", GST_RANK_NONE,
-      GST_TYPE_RTP_JITTER_BUFFER);
 
   /* Control */
   pclass->play = melo_player_airplay_play;
@@ -321,7 +315,7 @@ melo_player_airplay_setup (MeloPlayerAirplay *pair,
     src = gst_element_factory_make ("udpsrc", NULL);
     src_caps = gst_element_factory_make ("capsfilter", NULL);
     raop = gst_element_factory_make ("rtpraop", NULL);
-    rtp = gst_element_factory_make ("rtpjitterbuffer_bp", NULL);
+    rtp = gst_element_factory_make ("rtpjitterbuffer", NULL);
     rtp_caps = gst_element_factory_make ("capsfilter", NULL);
     depay = gst_element_factory_make ("rtpraopdepay", NULL);
     if (codec == MELO_AIRPLAY_CODEC_AAC)

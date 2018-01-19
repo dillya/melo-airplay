@@ -34,7 +34,7 @@ PKG_CHECK_MODULES([LIBMELO],
   ])
 
 dnl Check for Gstreamer sdp
-GST_REQ=1.4.4
+GST_REQ=1.8.3
 PKG_CHECK_MODULES([GST_SDP],
   gstreamer-sdp-1.0 >= $GST_REQ, [],
   [
