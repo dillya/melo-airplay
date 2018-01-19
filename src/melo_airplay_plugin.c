@@ -37,10 +37,7 @@ melo_airplay_disable (void)
   return TRUE;
 }
 
-G_MODULE_EXPORT
-const MeloPlugin melo_plugin = {
-  .name = "Airplay",
-  .description = "Airplay support for Melo",
-  .enable = melo_airplay_enable,
-  .disable = melo_airplay_disable,
-};
+DECLARE_MELO_PLUGIN ("Airplay",
+                     "Airplay support for Melo",
+                     melo_airplay_enable,
+                     melo_airplay_disable);
