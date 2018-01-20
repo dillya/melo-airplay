@@ -194,8 +194,11 @@ melo_player_airplay_get_pos (MeloPlayer *player)
   /* Get RTP time */
   if (gst_rtp_raop_depay_query_rtptime (GST_RTP_RAOP_DEPAY (priv->raop_depay),
                                         &pos)) {
-    pos = ((pos - priv->start_rtptime) * G_GUINT64_CONSTANT (1000)) /
-          priv->samplerate;
+    if (pos > priv->start_rtptime)
+      pos = ((pos - priv->start_rtptime) * G_GUINT64_CONSTANT (1000)) /
+            priv->samplerate;
+    else
+      pos = 0;
   }
 
   /* Unlock player mutex */
