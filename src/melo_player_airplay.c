@@ -158,6 +158,14 @@ static gboolean
 melo_player_airplay_play (MeloPlayer *player, const gchar *path,
                           const gchar *name, MeloTags *tags, gboolean insert)
 {
+  MeloTags *cur;
+
+  cur = melo_player_get_tags (player);
+  if (tags && cur && !g_strcmp0 (cur->artist, tags->artist) &&
+      !g_strcmp0 (cur->album, tags->album))
+    melo_tags_merge (tags, cur);
+  melo_tags_unref (cur);
+
   /* Update tags */
   melo_player_take_status_tags (player, tags);
 
