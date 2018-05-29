@@ -787,6 +787,9 @@ melo_rtsp_read_tags (MeloAirplayClient *aclient, guchar *buffer, gsize size)
     } else if (!memcmp (buffer, "asal", 4)) {
       g_free (tags->album);
       tags->album = g_strndup (buffer + 8, len);
+    } else if (!memcmp (buffer, "asgn", 4)) {
+      g_free (tags->genre);
+      tags->genre = g_strndup (buffer + 8, len);
     }
 
     /* Go to next block */
