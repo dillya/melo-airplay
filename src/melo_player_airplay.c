@@ -647,13 +647,22 @@ melo_player_airplay_set_cover (MeloPlayerAirplay *pair, GBytes *cover,
   MeloPlayer *player = MELO_PLAYER (pair);
   MeloTags *tags;
 
-  /* Get tags */
-  tags = melo_player_get_tags (player);
-
-  /* Set cover */
+  /* Create new tags */
+  tags = melo_tags_new ();
   if (tags) {
-    melo_tags_take_cover (tags, cover, cover_type);
-    melo_tags_set_cover_url (tags, G_OBJECT (pair), NULL, NULL);
+    MeloTags *otags;
+
+    /* Set new cover */
+    melo_tags_set_cover_by_data (tags, cover, MELO_TAGS_COVER_PERSIST_NONE);
+
+    /* Merge current tags */
+    otags = melo_player_get_tags (player);
+    if (otags) {
+      melo_tags_merge (tags, otags);
+      melo_tags_unref (otags);
+    }
+
+    /* Set new tags to player status */
     melo_player_take_status_tags (player, tags);
   }
 
