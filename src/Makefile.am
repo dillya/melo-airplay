@@ -23,6 +23,7 @@ libmelo_airplay_la_LIBADD = \
 
 noinst_HEADERS = \
 	melo_airplay.h \
+	melo_airplay_pkey.h \
 	gsttcpraop.h \
 	gstrtpraop.h \
 	gstrtpraopdepay.h \
