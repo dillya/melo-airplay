@@ -39,6 +39,9 @@
 #include "melo_airplay_rtsp.h"
 
 typedef struct {
+  /* Connection */
+  MeloRtspServerConnection *conn;
+
   /* Authentication */
   bool is_auth;
 
@@ -456,8 +459,8 @@ melo_airplay_rtsp_request_setup (MeloAirplayRtsp *rtsp,
 
   /* Close current client */
   if (rtsp->current_client && rtsp->current_client != client) {
+    melo_rtsp_server_connection_close (rtsp->current_client->conn);
     rtsp->current_client->player = NULL;
-    /* TODO: close current client */
   }
 
   /* Replace client */
@@ -527,6 +530,7 @@ melo_airplay_rtsp_request_cb (MeloRtspServerConnection *connection,
   if (!client) {
     client = g_slice_new0 (MeloAirplayClient);
     client->tags = melo_tags_new ();
+    client->conn = connection;
     *conn_data = client;
   }
 
