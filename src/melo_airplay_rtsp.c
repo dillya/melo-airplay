@@ -50,7 +50,6 @@ typedef struct {
 
   /* Item status */
   uint64_t mper;
-  MeloTags *tags;
   char *cover;
 
   /* Cover art */
@@ -529,7 +528,6 @@ melo_airplay_rtsp_request_cb (MeloRtspServerConnection *connection,
   /* Create new client */
   if (!client) {
     client = g_slice_new0 (MeloAirplayClient);
-    client->tags = melo_tags_new ();
     client->conn = connection;
     *conn_data = client;
   }
@@ -606,27 +604,12 @@ melo_airplay_rtsp_request_cb (MeloRtspServerConnection *connection,
 
     /* Reset cover */
     if (!g_strcmp0 (client->type, "image/none")) {
-      MeloTags *tags;
-
       /* Remove cover */
       g_free (client->cover);
       client->cover = NULL;
 
-      /* Remove cover from tags */
-      tags = melo_tags_new ();
-      if (tags) {
-        /* Copy current tags without cover */
-        melo_tags_set_title (tags, melo_tags_get_title (client->tags));
-        melo_tags_set_artist (tags, melo_tags_get_artist (client->tags));
-        melo_tags_set_album (tags, melo_tags_get_album (client->tags));
-        melo_tags_set_genre (tags, melo_tags_get_genre (client->tags));
-        melo_tags_set_track (tags, melo_tags_get_track (client->tags));
-        melo_tags_unref (client->tags);
-
-        /* Update player state */
-        client->tags = melo_tags_ref (tags);
-        melo_airplay_player_take_tags (client->player, tags);
-      }
+      /* Reset player cover */
+      melo_airplay_player_reset_cover (client->player);
     }
     break;
   default:;
@@ -774,7 +757,7 @@ static bool
 melo_airplay_rtsp_read_tags (
     MeloAirplayClient *client, unsigned char *buffer, size_t size)
 {
-  bool reset = false;
+  bool reset = !client->mper;
   MeloTags *tags;
   size_t len;
 
@@ -829,16 +812,11 @@ melo_airplay_rtsp_read_tags (
     size -= len + 8;
   }
 
-  /* Copy current tags */
-  if (reset) {
-    melo_tags_unref (client->tags);
-    melo_tags_set_cover (tags, NULL, client->cover);
-  } else
-    melo_tags_merge (tags, client->tags);
-  client->tags = tags;
+  /* Set current cover */
+  melo_tags_set_cover (tags, NULL, client->cover);
 
   /* Update tags in player */
-  melo_airplay_player_take_tags (client->player, melo_tags_ref (tags));
+  melo_airplay_player_take_tags (client->player, tags, reset);
 
   return true;
 }
@@ -865,24 +843,23 @@ melo_airplay_rtsp_read_image (MeloRtspServerConnection *connection,
   if (last) {
     MeloTags *tags;
 
-    /* Create new tags */
-    tags = melo_tags_new ();
-    if (tags) {
+    /* Save cover to cache */
+    g_free (client->cover);
+    client->cover = melo_cover_cache_save (client->img, client->img_size,
+        melo_cover_type_from_mime_type (client->type), g_free, client->img);
 
-      /* Save cover to cache */
-      g_free (client->cover);
-      client->cover = melo_cover_cache_save (client->img, client->img_size,
-          melo_cover_type_from_mime_type (client->type), g_free, client->img);
+    /* Update cover only if meta have been received once */
+    if (client->mper) {
+      /* Create new tags */
+      tags = melo_tags_new ();
+      if (tags) {
+        /* Attach cover to tags */
+        melo_tags_set_cover (tags, NULL, client->cover);
 
-      /* Attach cover to tags */
-      melo_tags_set_cover (tags, NULL, client->cover);
-      melo_tags_merge (tags, client->tags);
-      client->tags = tags;
-
-      /* Send cover to player */
-      melo_airplay_player_take_tags (client->player, melo_tags_ref (tags));
-    } else
-      g_free (client->img);
+        /* Send cover to player */
+        melo_airplay_player_take_tags (client->player, tags, false);
+      }
+    }
 
     /* Free cover */
     client->img_size = 0;
@@ -991,7 +968,6 @@ melo_airplay_rtsp_close_cb (
   g_free (client->type);
   g_free (client->img);
   g_free (client->cover);
-  melo_tags_unref (client->tags);
   g_slice_free (MeloAirplayClient, client);
 }
 

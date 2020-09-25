@@ -675,12 +675,27 @@ melo_airplay_player_set_progress (MeloAirplayPlayer *player, unsigned int start,
 }
 
 void
-melo_airplay_player_take_tags (MeloAirplayPlayer *player, MeloTags *tags)
+melo_airplay_player_take_tags (
+    MeloAirplayPlayer *player, MeloTags *tags, bool reset)
 {
-  if (player)
-    melo_player_update_media (MELO_PLAYER (player), NULL, tags);
-  else
+  if (!player) {
     melo_tags_unref (tags);
+    return;
+  }
+
+  if (reset)
+    melo_player_update_media (
+        MELO_PLAYER (player), NULL, tags, MELO_TAGS_MERGE_FLAG_NONE);
+  else
+    melo_player_update_tags (
+        MELO_PLAYER (player), tags, MELO_TAGS_MERGE_FLAG_NONE);
+}
+
+void
+melo_airplay_player_reset_cover (MeloAirplayPlayer *player)
+{
+  melo_player_update_tags (
+      MELO_PLAYER (player), melo_tags_new (), MELO_TAGS_MERGE_FLAG_SKIP_COVER);
 }
 
 double

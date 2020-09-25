@@ -61,7 +61,9 @@ bool melo_airplay_player_teardown (MeloAirplayPlayer *player);
 bool melo_airplay_player_set_volume (MeloAirplayPlayer *player, double volume);
 bool melo_airplay_player_set_progress (MeloAirplayPlayer *player,
     unsigned int start, unsigned int cur, unsigned int end);
-void melo_airplay_player_take_tags (MeloAirplayPlayer *player, MeloTags *tags);
+void melo_airplay_player_take_tags (
+    MeloAirplayPlayer *player, MeloTags *tags, bool reset);
+void melo_airplay_player_reset_cover (MeloAirplayPlayer *player);
 
 double melo_airplay_player_get_volume (MeloAirplayPlayer *player);
 
