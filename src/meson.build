@@ -28,5 +28,6 @@ shared_library(
 		gstreamer_rtp_dep,
 		libcrypto_dep
 	],
+	version : meson.project_version(),
 	install : true,
 	install_dir : libmelo_dep.get_pkgconfig_variable('moduledir'))
