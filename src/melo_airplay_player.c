@@ -122,7 +122,7 @@ melo_airplay_player_new ()
 {
   return g_object_new (MELO_TYPE_AIRPLAY_PLAYER, "id", MELO_AIRPLAY_PLAYER_ID,
       "name", "AirPlay", "description", "Play music with AirPlay", "icon",
-      "fab:chromecast", NULL);
+      MELO_AIRPLAY_PLAYER_ICON, NULL);
 }
 
 static gboolean

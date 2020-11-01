@@ -418,6 +418,7 @@ melo_airplay_rtsp_request_setup (MeloAirplayRtsp *rtsp,
   const char *hostname;
   char *transport;
   char *player_name;
+  MeloTags *tags;
 
   /* Get Transport header */
   header = melo_rtsp_server_connection_get_header (connection, "Transport");
@@ -452,8 +453,12 @@ melo_airplay_rtsp_request_setup (MeloAirplayRtsp *rtsp,
   player_name =
       g_strdup_printf ("Airplay: %s", hostname ? hostname : "unknown");
 
+  /* Set airplay icon */
+  tags = melo_tags_new ();
+  melo_tags_set_cover (tags, NULL, MELO_AIRPLAY_PLAYER_ICON);
+
   /* Set player */
-  melo_playlist_play_media (MELO_AIRPLAY_PLAYER_ID, NULL, player_name, NULL);
+  melo_playlist_play_media (MELO_AIRPLAY_PLAYER_ID, NULL, player_name, tags);
   g_free (player_name);
 
   /* Close current client */
@@ -609,7 +614,8 @@ melo_airplay_rtsp_request_cb (MeloRtspServerConnection *connection,
       client->cover = NULL;
 
       /* Reset player cover */
-      melo_airplay_player_reset_cover (client->player);
+      if (client->mper)
+        melo_airplay_player_reset_cover (client->player);
     }
     break;
   default:;
